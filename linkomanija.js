@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v3.6
+ * LinkoManija.net plugin for LAMPA v3.7
  */
 (function () {
     'use strict';
@@ -372,12 +372,36 @@
             .trim();
     }
 
+    function searchAndSelect(query) {
+        Lampa.Noty.show('LinkoManija: ieškoma…');
+        ensureAuth(function () {
+            var url = BASE + '/browse.php?search=' + encodeURIComponent(query) + '&page=0';
+            request(url, false, function (html) {
+                var list = parseBrowse(html);
+                if (!list.length) { Lampa.Noty.show('LinkoManija: nerasta / не найдено'); return; }
+                var items = list.map(function (item) {
+                    var sub = [item.size, item.seeds ? '🌱 ' + item.seeds : '', item.date].filter(Boolean).join('  ·  ');
+                    return { title: item.title, subtitle: sub, _item: item };
+                });
+                Lampa.Select.show({
+                    title: 'LinkoManija: ' + query,
+                    items: items,
+                    onSelect: function (sel) {
+                        Lampa.Select.close();
+                        showDetail(sel._item);
+                    },
+                    onBack: function () { Lampa.Controller.toggle('menu'); }
+                });
+            }, function () { Lampa.Noty.show('LinkoManija: tinklo klaida'); });
+        });
+    }
+
     function injectLmFullBtn(title) {
         if ($('.lm_full_btn').length) return;
         var q = cleanTitleForSearch(title);
         var lmBtn = $('<div class="full-start__button selector lm_full_btn" style="margin-top:6px">🇱🇹 LinkoManija</div>');
         lmBtn.on('hover:enter click', function () {
-            Lampa.Activity.push({ url: '', title: 'LM: ' + q, component: 'lm_browse', query: q, page: 1 });
+            searchAndSelect(q);
         });
         // Попробуем все возможные контейнеры кнопок в разных версиях LAMPA
         var places = [
@@ -621,7 +645,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.6</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.7</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

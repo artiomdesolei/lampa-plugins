@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v4.1
+ * LinkoManija.net plugin for LAMPA v4.2
  */
 (function () {
     'use strict';
@@ -429,13 +429,7 @@
         ];
         for (var i = 0; i < places.length; i++) {
             var el = $(places[i]).first();
-            if (el.length) {
-                // Вставляем сразу второй — после первой кнопки (Watch)
-                var firstBtn = el.find('.selector').first();
-                if (firstBtn.length) firstBtn.after(lmBtn);
-                else el.prepend(lmBtn);
-                break;
-            }
+            if (el.length) { el.prepend(lmBtn); break; }
         }
 
         // Фоновый поиск — показываем количество результатов на кнопке
@@ -682,7 +676,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.1</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.2</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

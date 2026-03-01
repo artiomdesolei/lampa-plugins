@@ -302,6 +302,7 @@
     /* --- TV SELECTION + PLAY --- */
     function selectAndPlay(d, item) {
         var tvs = getTvDevices();
+        Lampa.Noty.show('LM debug: TV найдено = ' + tvs.length);
         if (!tvs.length) { startTorrent(d, item); return; }
         var actions = [{ title: '▶ Žiūrėti / Смотреть здесь', _tv: null }];
         tvs.forEach(function (tv) {

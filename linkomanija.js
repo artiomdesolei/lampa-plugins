@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v3.9
+ * LinkoManija.net plugin for LAMPA v4.0
  */
 (function () {
     'use strict';
@@ -372,61 +372,8 @@
             .trim();
     }
 
-    /* TV-совместимое детальное окно через Lampa.Select */
-    function showDetailSelect(item) {
-        Lampa.Select.show({
-            title: item.title,
-            items: [{ title: 'Kraunama…' }],
-            onSelect: function () {},
-            onBack: function () { Lampa.Select.close(); }
-        });
-        ensureAuth(function () {
-            var detailUrl = item.href
-                ? (/^https?:/.test(item.href) ? item.href : BASE + item.href)
-                : (BASE + '/details?id=' + item.id);
-            request(detailUrl, false, function (html) {
-                var d = parseDetail(html, item.id);
-                var titleDisp = d.lt_title || d.title || item.title;
-                var meta = [d.year, d.genre, d.imdb ? 'IMDB ' + d.imdb : '',
-                    (d.size || '') + (d.seeds ? '  🌱 ' + d.seeds : '')
-                ].filter(Boolean).join('  ·  ');
-
-                var items = [];
-                if (d.dl) {
-                    items.push({ title: '▶ Žiūrėti / Смотреть', subtitle: meta, _act: 'watch', _d: d });
-                }
-                if (d.youtube) {
-                    items.push({ title: '🎬 Treileras', _act: 'trailer', _d: d });
-                }
-                if (d.description) {
-                    items.push({ title: d.description.slice(0, 200), subtitle: 'Siužetas', _act: 'desc', _d: d });
-                }
-
-                // setTimeout разрывает синхронную цепочку close → show
-                Lampa.Select.close();
-                setTimeout(function () {
-                    Lampa.Select.show({
-                        title: titleDisp,
-                        items: items,
-                        onSelect: function (sel) {
-                            if (sel._act === 'watch') {
-                                Lampa.Select.close();
-                                setTimeout(function () { startTorrent(sel._d, item); }, 50);
-                            } else if (sel._act === 'trailer') {
-                                try { Lampa.Youtube.trailer({ url: 'https://www.youtube.com/watch?v=' + sel._d.youtube }); }
-                                catch(e) { Lampa.Noty.show('YouTube: youtu.be/' + sel._d.youtube); }
-                            } else if (sel._act === 'desc' && sel._d.description) {
-                                Lampa.Noty.show(sel._d.description);
-                            }
-                        },
-                        onBack: function () { Lampa.Select.close(); }
-                    });
-                }, 50);
-            }, function () {
-                Lampa.Select.close();
-                Lampa.Noty.show('LinkoManija: klaida');
-            });
-        });
+    function isLt(title) {
+        return /\bLT\b/.test(title);
     }
 
     function searchAndSelect(query) {
@@ -436,17 +383,32 @@
             request(url, false, function (html) {
                 var list = parseBrowse(html);
                 if (!list.length) { Lampa.Noty.show('LinkoManija: nerasta / не найдено'); return; }
+
+                // LT торренты наверх
+                list.sort(function (a, b) { return (isLt(a.title) ? 0 : 1) - (isLt(b.title) ? 0 : 1); });
+
                 var items = list.map(function (item) {
                     var sub = [item.size, item.seeds ? '🌱 ' + item.seeds : '', item.date].filter(Boolean).join('  ·  ');
-                    return { title: item.title, subtitle: sub, _item: item };
+                    var t = isLt(item.title) ? '🇱🇹 ' + item.title : item.title;
+                    return { title: t, subtitle: sub, _item: item };
                 });
+
                 Lampa.Select.show({
                     title: 'LinkoManija: ' + query,
                     items: items,
                     onSelect: function (sel) {
-                        var chosen = sel._item;
-                        // setTimeout разрывает синхронную цепочку Select → Select
-                        setTimeout(function () { showDetailSelect(chosen); }, 50);
+                        var item = sel._item;
+                        Lampa.Select.close();
+                        // Грузим detail только чтобы получить ссылку на .torrent
+                        Lampa.Noty.show('LinkoManija: kraunama…');
+                        var detailUrl = item.href
+                            ? (/^https?:/.test(item.href) ? item.href : BASE + item.href)
+                            : (BASE + '/details?id=' + item.id);
+                        request(detailUrl, false, function (dHtml) {
+                            var d = parseDetail(dHtml, item.id);
+                            if (d.dl) { startTorrent(d, item); }
+                            else { Lampa.Noty.show('LinkoManija: nerasta atsisiuntimo nuoroda'); }
+                        }, function () { Lampa.Noty.show('LinkoManija: klaida'); });
                     },
                     onBack: function () { Lampa.Controller.toggle('menu'); }
                 });
@@ -714,7 +676,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.9</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.0</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

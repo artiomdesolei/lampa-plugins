@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v3.8
+ * LinkoManija.net plugin for LAMPA v3.9
  */
 (function () {
     'use strict';
@@ -402,23 +402,26 @@
                     items.push({ title: d.description.slice(0, 200), subtitle: 'Siužetas', _act: 'desc', _d: d });
                 }
 
+                // setTimeout разрывает синхронную цепочку close → show
                 Lampa.Select.close();
-                Lampa.Select.show({
-                    title: titleDisp,
-                    items: items,
-                    onSelect: function (sel) {
-                        if (sel._act === 'watch') {
-                            Lampa.Select.close();
-                            startTorrent(sel._d, item);
-                        } else if (sel._act === 'trailer') {
-                            try { Lampa.Youtube.trailer({ url: 'https://www.youtube.com/watch?v=' + sel._d.youtube }); }
-                            catch(e) { Lampa.Noty.show('YouTube: youtu.be/' + sel._d.youtube); }
-                        } else if (sel._act === 'desc' && sel._d.description) {
-                            Lampa.Noty.show(sel._d.description);
-                        }
-                    },
-                    onBack: function () { Lampa.Select.close(); }
-                });
+                setTimeout(function () {
+                    Lampa.Select.show({
+                        title: titleDisp,
+                        items: items,
+                        onSelect: function (sel) {
+                            if (sel._act === 'watch') {
+                                Lampa.Select.close();
+                                setTimeout(function () { startTorrent(sel._d, item); }, 50);
+                            } else if (sel._act === 'trailer') {
+                                try { Lampa.Youtube.trailer({ url: 'https://www.youtube.com/watch?v=' + sel._d.youtube }); }
+                                catch(e) { Lampa.Noty.show('YouTube: youtu.be/' + sel._d.youtube); }
+                            } else if (sel._act === 'desc' && sel._d.description) {
+                                Lampa.Noty.show(sel._d.description);
+                            }
+                        },
+                        onBack: function () { Lampa.Select.close(); }
+                    });
+                }, 50);
             }, function () {
                 Lampa.Select.close();
                 Lampa.Noty.show('LinkoManija: klaida');
@@ -441,8 +444,9 @@
                     title: 'LinkoManija: ' + query,
                     items: items,
                     onSelect: function (sel) {
-                        Lampa.Select.close();
-                        showDetailSelect(sel._item);  // TV-совместимое детальное окно
+                        var chosen = sel._item;
+                        // setTimeout разрывает синхронную цепочку Select → Select
+                        setTimeout(function () { showDetailSelect(chosen); }, 50);
                     },
                     onBack: function () { Lampa.Controller.toggle('menu'); }
                 });
@@ -710,7 +714,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.8</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.9</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v4.0
+ * LinkoManija.net plugin for LAMPA v4.1
  */
 (function () {
     'use strict';
@@ -676,7 +676,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.0</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.1</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);
@@ -696,6 +696,10 @@
         try {
             Lampa.Listener.follow('app', function (e) {
                 if (e.type === 'start' || e.type === 'ready') addMenu();
+                // Авто-логин при старте если есть сохранённые данные
+                if (e.type === 'ready' && sget('user') && sget('pass')) {
+                    doLogin(function () {}, function () {});
+                }
             });
         } catch(e) {}
 

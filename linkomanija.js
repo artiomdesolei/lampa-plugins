@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v3.5
+ * LinkoManija.net plugin for LAMPA v3.6
  */
 (function () {
     'use strict';
@@ -451,7 +451,9 @@
             Lampa.Controller.add('content', {
                 toggle: function () {
                     Lampa.Controller.collectionSet(scroll.render());
-                    Lampa.Controller.collectionFocus(false, scroll.render());
+                    // Явно фокусируемся на первом элементе — нужно для пульта TV
+                    var first = scroll.render().find('.selector').first();
+                    Lampa.Controller.collectionFocus(first.length ? first : false, scroll.render());
                 },
                 back: function () { Lampa.Activity.backward(); }
             });
@@ -491,7 +493,12 @@
         return {
             create:  function () { reload(); },
             render:  function () { return scroll.render(); },
-            start:   function () { setCtrl(); },
+            start:   function () {
+                setCtrl();
+                // Повторный toggle через 800мс — на TV после открытия с full-страницы
+                // контроллер может перехватить родительский компонент
+                setTimeout(function () { Lampa.Controller.toggle('content'); }, 800);
+            },
             pause:   function () {},
             stop:    function () {},
             destroy: function () { if (scroll.destroy) scroll.destroy(); }
@@ -614,7 +621,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.5</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.6</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

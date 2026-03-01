@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v4.1
+ * LinkoManija.net plugin for LAMPA v4.2
  */
 (function () {
     'use strict';
@@ -376,6 +376,114 @@
         return /\bLT\b/.test(title);
     }
 
+    /* --- TV DEVICES (отправка торрента в TorrServe на TV) --- */
+    function getTvDevices() {
+        try { return JSON.parse(sget('tv_list', '[]')); } catch(e) { return []; }
+    }
+    function saveTvDevices(list) { sset('tv_list', JSON.stringify(list)); }
+
+    function sendToTv(tv, dlUrl, title, poster) {
+        var base = /^https?:\/\//.test(tv.ip) ? tv.ip : 'http://' + tv.ip;
+        if (!/:\d+$/.test(base)) base += ':8090';
+        $.ajax({
+            url: base + '/torrents',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ action: 'add', link: dlUrl, title: title, poster: poster || '' }),
+            success: function () { Lampa.Noty.show('📺 Отправлено: ' + tv.name); },
+            error: function () { Lampa.Noty.show('📺 Ошибка: ' + tv.name + ' (' + base + ')'); }
+        });
+    }
+
+    function showAddTvDialog(onAdded) {
+        var html = $([
+            '<div style="padding:20px;min-width:260px">',
+            '<p style="margin:0 0 6px;color:#aaa;font-size:13px">Название (например: Гостиная)</p>',
+            '<input id="lm_tv_name" type="text" autocomplete="off"',
+            ' style="width:100%;padding:10px;margin-bottom:14px;background:#222;border:1px solid #444;',
+            'color:#fff;border-radius:4px;font-size:16px;box-sizing:border-box">',
+            '<p style="margin:0 0 6px;color:#aaa;font-size:13px">IP TorrServe (например: 192.168.1.100)</p>',
+            '<input id="lm_tv_ip" type="text" autocomplete="off"',
+            ' style="width:100%;padding:10px;margin-bottom:18px;background:#222;border:1px solid #444;',
+            'color:#fff;border-radius:4px;font-size:16px;box-sizing:border-box">',
+            '<div class="full-start__button selector" id="lm_tv_save"',
+            ' style="display:inline-block;padding:10px 24px">Сохранить</div>',
+            '</div>'
+        ].join(''));
+        html.find('#lm_tv_save').on('hover:enter click', function () {
+            var name = html.find('#lm_tv_name').val().trim();
+            var ip   = html.find('#lm_tv_ip').val().trim();
+            if (!name || !ip) { Lampa.Noty.show('Заполните все поля'); return; }
+            var list = getTvDevices();
+            list.push({ name: name, ip: ip });
+            saveTvDevices(list);
+            Lampa.Modal.close();
+            Lampa.Noty.show('✓ Добавлено: ' + name);
+            if (onAdded) onAdded();
+        });
+        Lampa.Modal.open({ title: 'Добавить TV', html: html, onBack: function () { Lampa.Modal.close(); } });
+        setTimeout(function () { html.find('#lm_tv_name').focus(); }, 200);
+    }
+
+    function showManageTvs() {
+        var list = getTvDevices();
+        if (!list.length) { showAddTvDialog(); return; }
+        var items = list.map(function (tv, i) {
+            return { title: '📺 ' + tv.name, subtitle: tv.ip, _idx: i };
+        });
+        items.push({ title: '+ Добавить TV', _add: true });
+        Lampa.Select.show({
+            title: '📺 Управление TV',
+            items: items,
+            onSelect: function (sel) {
+                if (sel._add) {
+                    Lampa.Select.close();
+                    setTimeout(function () { showAddTvDialog(showManageTvs); }, 50);
+                } else {
+                    var idx = sel._idx;
+                    Lampa.Select.close();
+                    setTimeout(function () {
+                        Lampa.Select.show({
+                            title: list[idx].name,
+                            items: [
+                                { title: '🗑 Удалить', _del: true },
+                                { title: '← Назад' }
+                            ],
+                            onSelect: function (a) {
+                                if (a._del) {
+                                    var l = getTvDevices(); l.splice(idx, 1); saveTvDevices(l);
+                                    Lampa.Noty.show('Удалено');
+                                }
+                                Lampa.Select.close();
+                            },
+                            onBack: function () { Lampa.Select.close(); }
+                        });
+                    }, 50);
+                }
+            },
+            onBack: function () { Lampa.Controller.toggle('menu'); }
+        });
+    }
+
+    function loadAndSend(item, tv) {
+        Lampa.Noty.show('LinkoManija: kraunama…');
+        var detailUrl = item.href
+            ? (/^https?:/.test(item.href) ? item.href : BASE + item.href)
+            : (BASE + '/details?id=' + item.id);
+        request(detailUrl, false, function (dHtml) {
+            var d = parseDetail(dHtml, item.id);
+            if (!d.dl) { Lampa.Noty.show('LinkoManija: nerasta atsisiuntimo nuoroda'); return; }
+            if (tv) {
+                var dlUrl = proxyUrl(d.dl);
+                var cookies = sget('cookies');
+                if (cookies) dlUrl += (dlUrl.indexOf('?') >= 0 ? '&' : '?') + '_ck=' + encodeURIComponent(cookies);
+                sendToTv(tv, dlUrl, d.lt_title || d.title || item.title, d.poster || '');
+            } else {
+                startTorrent(d, item);
+            }
+        }, function () { Lampa.Noty.show('LinkoManija: klaida'); });
+    }
+
     function searchAndSelect(query) {
         Lampa.Noty.show('LinkoManija: ieškoma…');
         ensureAuth(function () {
@@ -398,17 +506,30 @@
                     items: items,
                     onSelect: function (sel) {
                         var item = sel._item;
-                        Lampa.Select.close();
-                        // Грузим detail только чтобы получить ссылку на .torrent
-                        Lampa.Noty.show('LinkoManija: kraunama…');
-                        var detailUrl = item.href
-                            ? (/^https?:/.test(item.href) ? item.href : BASE + item.href)
-                            : (BASE + '/details?id=' + item.id);
-                        request(detailUrl, false, function (dHtml) {
-                            var d = parseDetail(dHtml, item.id);
-                            if (d.dl) { startTorrent(d, item); }
-                            else { Lampa.Noty.show('LinkoManija: nerasta atsisiuntimo nuoroda'); }
-                        }, function () { Lampa.Noty.show('LinkoManija: klaida'); });
+                        var tvs = getTvDevices();
+                        if (!tvs.length) {
+                            // TV не настроены — играть прямо здесь
+                            Lampa.Select.close();
+                            loadAndSend(item, null);
+                        } else {
+                            // Показываем выбор: здесь или на конкретный TV
+                            var actions = [{ title: '▶ Žiūrėti / Смотреть здесь', _tv: null, _item: item }];
+                            tvs.forEach(function (tv) {
+                                actions.push({ title: '📺 ' + tv.name, subtitle: tv.ip, _tv: tv, _item: item });
+                            });
+                            Lampa.Select.close();
+                            setTimeout(function () {
+                                Lampa.Select.show({
+                                    title: item.title,
+                                    items: actions,
+                                    onSelect: function (a) {
+                                        Lampa.Select.close();
+                                        loadAndSend(a._item, a._tv);
+                                    },
+                                    onBack: function () { Lampa.Select.close(); }
+                                });
+                            }, 50);
+                        }
                     },
                     onBack: function () { Lampa.Controller.toggle('menu'); }
                 });
@@ -624,6 +745,12 @@
                 field: { name: 'Выйти / Atsijungti', description: 'Сбросить сессию' },
                 onChange: function () { sset('logged', 'no'); Lampa.Noty.show('LinkoManija: sesija išvalyta'); }
             });
+            Lampa.SettingsApi.addParam({
+                component: 'linkomanija',
+                param: { name: 'lm_tv_btn', type: 'button', default: false },
+                field: { name: '📺 TV устройства', description: 'Добавить/удалить TV с TorrServe' },
+                onChange: function () { showManageTvs(); }
+            });
         } catch(e) {}
     }
 
@@ -631,13 +758,16 @@
     function onMenuClick() {
         var items = CATS.map(function (c) { return { title: c.name, cat_id: c.id }; });
         items.push({ title: '🔍 Paieška / Поиск', search: true });
+        items.push({ title: '📺 TV устройства', tv_manage: true });
         items.push({ title: '⚙ Prisijungti / Войти', login: true });
         if (isLogged()) items.push({ title: '⚙ Atsijungti / Выйти', logout: true });
         Lampa.Select.show({
             title: 'LinkoManija', items: items,
             onSelect: function (sel) {
                 Lampa.Menu.close();
-                if (sel.login) {
+                if (sel.tv_manage) {
+                    showManageTvs();
+                } else if (sel.login) {
                     showLoginDialog();
                 } else if (sel.logout) {
                     sset('logged', 'no');
@@ -676,7 +806,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.1</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.2</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

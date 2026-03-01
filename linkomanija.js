@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v3.7
+ * LinkoManija.net plugin for LAMPA v3.8
  */
 (function () {
     'use strict';
@@ -372,6 +372,60 @@
             .trim();
     }
 
+    /* TV-совместимое детальное окно через Lampa.Select */
+    function showDetailSelect(item) {
+        Lampa.Select.show({
+            title: item.title,
+            items: [{ title: 'Kraunama…' }],
+            onSelect: function () {},
+            onBack: function () { Lampa.Select.close(); }
+        });
+        ensureAuth(function () {
+            var detailUrl = item.href
+                ? (/^https?:/.test(item.href) ? item.href : BASE + item.href)
+                : (BASE + '/details?id=' + item.id);
+            request(detailUrl, false, function (html) {
+                var d = parseDetail(html, item.id);
+                var titleDisp = d.lt_title || d.title || item.title;
+                var meta = [d.year, d.genre, d.imdb ? 'IMDB ' + d.imdb : '',
+                    (d.size || '') + (d.seeds ? '  🌱 ' + d.seeds : '')
+                ].filter(Boolean).join('  ·  ');
+
+                var items = [];
+                if (d.dl) {
+                    items.push({ title: '▶ Žiūrėti / Смотреть', subtitle: meta, _act: 'watch', _d: d });
+                }
+                if (d.youtube) {
+                    items.push({ title: '🎬 Treileras', _act: 'trailer', _d: d });
+                }
+                if (d.description) {
+                    items.push({ title: d.description.slice(0, 200), subtitle: 'Siužetas', _act: 'desc', _d: d });
+                }
+
+                Lampa.Select.close();
+                Lampa.Select.show({
+                    title: titleDisp,
+                    items: items,
+                    onSelect: function (sel) {
+                        if (sel._act === 'watch') {
+                            Lampa.Select.close();
+                            startTorrent(sel._d, item);
+                        } else if (sel._act === 'trailer') {
+                            try { Lampa.Youtube.trailer({ url: 'https://www.youtube.com/watch?v=' + sel._d.youtube }); }
+                            catch(e) { Lampa.Noty.show('YouTube: youtu.be/' + sel._d.youtube); }
+                        } else if (sel._act === 'desc' && sel._d.description) {
+                            Lampa.Noty.show(sel._d.description);
+                        }
+                    },
+                    onBack: function () { Lampa.Select.close(); }
+                });
+            }, function () {
+                Lampa.Select.close();
+                Lampa.Noty.show('LinkoManija: klaida');
+            });
+        });
+    }
+
     function searchAndSelect(query) {
         Lampa.Noty.show('LinkoManija: ieškoma…');
         ensureAuth(function () {
@@ -388,7 +442,7 @@
                     items: items,
                     onSelect: function (sel) {
                         Lampa.Select.close();
-                        showDetail(sel._item);
+                        showDetailSelect(sel._item);  // TV-совместимое детальное окно
                     },
                     onBack: function () { Lampa.Controller.toggle('menu'); }
                 });
@@ -400,9 +454,8 @@
         if ($('.lm_full_btn').length) return;
         var q = cleanTitleForSearch(title);
         var lmBtn = $('<div class="full-start__button selector lm_full_btn" style="margin-top:6px">🇱🇹 LinkoManija</div>');
-        lmBtn.on('hover:enter click', function () {
-            searchAndSelect(q);
-        });
+        lmBtn.on('hover:enter click', function () { searchAndSelect(q); });
+
         // Попробуем все возможные контейнеры кнопок в разных версиях LAMPA
         var places = [
             '.full-start__buttons', '.full-start__icons-inner', '.full-start__icons',
@@ -410,7 +463,19 @@
         ];
         for (var i = 0; i < places.length; i++) {
             var el = $(places[i]).first();
-            if (el.length) { el.append(lmBtn); return; }
+            if (el.length) { el.append(lmBtn); break; }
+        }
+
+        // Фоновый поиск — показываем количество результатов на кнопке
+        if (isLogged()) {
+            var countUrl = BASE + '/browse.php?search=' + encodeURIComponent(q) + '&page=0';
+            request(countUrl, false, function (html) {
+                var list = parseBrowse(html);
+                if (list.length > 0) {
+                    var suffix = list.length >= 15 ? '+' : '';
+                    lmBtn.text('🇱🇹 LinkoManija (' + list.length + suffix + ')');
+                }
+            }, function () {});
         }
     }
 
@@ -645,7 +710,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.7</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.8</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

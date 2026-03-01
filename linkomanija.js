@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v4.2
+ * LinkoManija.net plugin for LAMPA v4.3
  */
 (function () {
     'use strict';
@@ -271,7 +271,7 @@
         watchBtn.on('hover:enter', function () {
             if (!d.dl) { Lampa.Noty.show('LinkoManija: nerasta nuoroda'); return; }
             Lampa.Modal.close();
-            startTorrent(d, item);
+            setTimeout(function () { selectAndPlay(d, item); }, 50);
         });
         btnRow.append(watchBtn);
         if (d.youtube) {
@@ -297,6 +297,32 @@
             back: function () { Lampa.Modal.close(); }
         });
         Lampa.Controller.toggle('modal');
+    }
+
+    /* --- TV SELECTION + PLAY --- */
+    function selectAndPlay(d, item) {
+        var tvs = getTvDevices();
+        if (!tvs.length) { startTorrent(d, item); return; }
+        var actions = [{ title: '▶ Žiūrėti / Смотреть здесь', _tv: null }];
+        tvs.forEach(function (tv) {
+            actions.push({ title: '📺 ' + tv.name, subtitle: tv.ip, _tv: tv });
+        });
+        Lampa.Select.show({
+            title: d.lt_title || d.title || item.title,
+            items: actions,
+            onSelect: function (a) {
+                Lampa.Select.close();
+                if (a._tv) {
+                    var dlUrl = proxyUrl(d.dl);
+                    var cookies = sget('cookies');
+                    if (cookies) dlUrl += (dlUrl.indexOf('?') >= 0 ? '&' : '?') + '_ck=' + encodeURIComponent(cookies);
+                    sendToTv(a._tv, dlUrl, d.lt_title || d.title || item.title, d.poster || '');
+                } else {
+                    startTorrent(d, item);
+                }
+            },
+            onBack: function () { Lampa.Select.close(); }
+        });
     }
 
     /* --- TORRSERVE --- */
@@ -474,12 +500,14 @@
             var d = parseDetail(dHtml, item.id);
             if (!d.dl) { Lampa.Noty.show('LinkoManija: nerasta atsisiuntimo nuoroda'); return; }
             if (tv) {
+                // Конкретный TV выбран — отправляем сразу
                 var dlUrl = proxyUrl(d.dl);
                 var cookies = sget('cookies');
                 if (cookies) dlUrl += (dlUrl.indexOf('?') >= 0 ? '&' : '?') + '_ck=' + encodeURIComponent(cookies);
                 sendToTv(tv, dlUrl, d.lt_title || d.title || item.title, d.poster || '');
             } else {
-                startTorrent(d, item);
+                // TV не выбран — показываем selectAndPlay (здесь или выбрать TV)
+                selectAndPlay(d, item);
             }
         }, function () { Lampa.Noty.show('LinkoManija: klaida'); });
     }
@@ -506,30 +534,8 @@
                     items: items,
                     onSelect: function (sel) {
                         var item = sel._item;
-                        var tvs = getTvDevices();
-                        if (!tvs.length) {
-                            // TV не настроены — играть прямо здесь
-                            Lampa.Select.close();
-                            loadAndSend(item, null);
-                        } else {
-                            // Показываем выбор: здесь или на конкретный TV
-                            var actions = [{ title: '▶ Žiūrėti / Смотреть здесь', _tv: null, _item: item }];
-                            tvs.forEach(function (tv) {
-                                actions.push({ title: '📺 ' + tv.name, subtitle: tv.ip, _tv: tv, _item: item });
-                            });
-                            Lampa.Select.close();
-                            setTimeout(function () {
-                                Lampa.Select.show({
-                                    title: item.title,
-                                    items: actions,
-                                    onSelect: function (a) {
-                                        Lampa.Select.close();
-                                        loadAndSend(a._item, a._tv);
-                                    },
-                                    onBack: function () { Lampa.Select.close(); }
-                                });
-                            }, 50);
-                        }
+                        Lampa.Select.close();
+                        loadAndSend(item, null); // null = покажет selectAndPlay если TV настроены
                     },
                     onBack: function () { Lampa.Controller.toggle('menu'); }
                 });
@@ -806,7 +812,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.2</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 4.3</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);

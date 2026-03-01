@@ -1,5 +1,5 @@
 /**
- * LinkoManija.net plugin for LAMPA v3.4
+ * LinkoManija.net plugin for LAMPA v3.5
  */
 (function () {
     'use strict';
@@ -372,38 +372,55 @@
             .trim();
     }
 
+    function injectLmFullBtn(title) {
+        if ($('.lm_full_btn').length) return;
+        var q = cleanTitleForSearch(title);
+        var lmBtn = $('<div class="full-start__button selector lm_full_btn" style="margin-top:6px">🇱🇹 LinkoManija</div>');
+        lmBtn.on('hover:enter click', function () {
+            Lampa.Activity.push({ url: '', title: 'LM: ' + q, component: 'lm_browse', query: q, page: 1 });
+        });
+        // Попробуем все возможные контейнеры кнопок в разных версиях LAMPA
+        var places = [
+            '.full-start__buttons', '.full-start__icons-inner', '.full-start__icons',
+            '.full-start__rate', '.full-start__right', '.full-start'
+        ];
+        for (var i = 0; i < places.length; i++) {
+            var el = $(places[i]).first();
+            if (el.length) { el.append(lmBtn); return; }
+        }
+    }
+
+    function getActiveTitle() {
+        try {
+            var act = Lampa.Activity.active ? Lampa.Activity.active() : null;
+            if (act) return act.original_title || act.title || '';
+        } catch(e) {}
+        return '';
+    }
+
     function hookFullPage() {
+        // Метод 1: стандартный full event
         try {
             Lampa.Listener.follow('full', function (e) {
-                if (e.type !== 'complite') return;
-                try {
-                    var comp = e.component;
-                    var movie = (e.data && e.data.movie) ? e.data.movie : (e.data || {});
-                    var title = movie.original_title || movie.title || '';
-                    if (!title) return;
+                if (e.type !== 'complite' && e.type !== 'complete') return;
+                var movie = (e.data && e.data.movie) ? e.data.movie
+                          : (e.component && e.component.activity && e.component.activity.data) ? e.component.activity.data
+                          : (e.data || {});
+                var title = movie.original_title || movie.title || getActiveTitle();
+                if (!title) return;
+                setTimeout(function () { injectLmFullBtn(title); }, 400);
+            });
+        } catch (e) {}
 
-                    setTimeout(function () {
-                        if (!comp || !comp.render) return;
-                        var fullEl = comp.render();
-                        if (!fullEl || !fullEl.length) return;
-                        if (fullEl.find('.lm_full_btn').length) return; // already added
-
-                        var lmBtn = $('<div class="full-start__button selector lm_full_btn" style="margin-top:4px">🇱🇹 LinkoManija</div>');
-                        lmBtn.on('hover:enter click', function () {
-                            var q = cleanTitleForSearch(title);
-                            Lampa.Activity.push({ url: '', title: 'LM: ' + q, component: 'lm_browse', query: q, page: 1 });
-                        });
-
-                        // Ищем ряд кнопок — несколько вариантов классов в разных версиях LAMPA
-                        var btnArea = fullEl.find('.full-start__buttons').first();
-                        if (!btnArea.length) btnArea = fullEl.find('.full-start__rate').first();
-                        if (!btnArea.length) btnArea = fullEl.find('.full-start__icons').first();
-                        if (!btnArea.length) btnArea = fullEl.find('[class*="full-start__b"]').first();
-                        if (btnArea.length) {
-                            btnArea.append(lmBtn);
-                        }
-                    }, 300);
-                } catch (ex) {}
+        // Метод 2: activity listener — срабатывает когда любая активность открывается
+        try {
+            Lampa.Listener.follow('activity', function (e) {
+                if (e.type !== 'end') return;
+                setTimeout(function () {
+                    if (!$('.full-start').length) return; // не full страница
+                    var title = getActiveTitle();
+                    if (title) injectLmFullBtn(title);
+                }, 600);
             });
         } catch (e) {}
     }
@@ -597,7 +614,7 @@
         if (!target.length) return; // menu DOM not ready yet
 
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="currentColor"><text y="48" font-size="46" font-weight="bold" font-family="Arial,sans-serif">LM</text></svg>';
-        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.4</div></li>');
+        var btn = $('<li class="menu__item selector" id="lm_menu_btn"><div class="menu__ico"></div><div class="menu__text">LinkoManija 3.5</div></li>');
         btn.find('.menu__ico').html(svg);
         btn.on('hover:enter click', onMenuClick);
         target.append(btn);
@@ -605,9 +622,11 @@
 
     /* --- INIT --- */
     function init() {
-        console.log('LinkoManija', 'init v3.4');
+        console.log('LinkoManija', 'init v3.5');
 
-        try { Lampa.Manifest.plugins = { type: 'other', version: '1.9', name: 'LinkoManija', description: 'linkomanija.net' }; } catch(e) {}
+        try {
+            if (Array.isArray(Lampa.Manifest.plugins)) Lampa.Manifest.plugins.push({ type: 'other', version: '3.5', name: 'LinkoManija' });
+        } catch(e) {}
         try { Lampa.Component.add('lm_browse', function (obj) { return BrowseComponent(obj); }); } catch(e) {}
         hookFullPage();
 
